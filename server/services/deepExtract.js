@@ -4,42 +4,41 @@ const MAX_PAGES = 5;
 const TIMEOUT_MS = 25000;
 const MAX_CONTENT_LENGTH = 10000;
 
-// Fetch a page via Firecrawl (JS rendering)
-async function firecrawlFetch(url) {
-  const apiKey = process.env.FIRECRAWL_API_KEY;
-  if (!apiKey) throw new Error('FIRECRAWL_API_KEY not configured');
+// Fetch a page via Jina Reader (free JS rendering)
+async function jinaFetch(url) {
+  const headers = {
+    'Accept': 'text/markdown',
+    'X-No-Cache': 'true',
+  };
+  const jinaKey = process.env.JINA_API_KEY;
+  if (jinaKey) {
+    headers['Authorization'] = `Bearer ${jinaKey}`;
+  }
 
-  const res = await fetch('https://api.firecrawl.dev/v1/scrape', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      url,
-      formats: ['markdown'],
-      waitFor: 3000,
-    }),
-    timeout: 10000,
+  const res = await fetch(`https://r.jina.ai/${url}`, {
+    headers,
+    timeout: 12000,
   });
 
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Firecrawl error ${res.status}: ${text.substring(0, 200)}`);
+    throw new Error(`Jina error ${res.status}`);
   }
 
-  const data = await res.json();
-  if (!data.success || !data.data) {
-    throw new Error('Firecrawl returned no data');
+  const text = await res.text();
+  const titleMatch = text.match(/^Title:\s*(.+)/m);
+  const contentMatch = text.match(/Markdown Content:\s*\n([\s\S]*)/);
+
+  let content = contentMatch ? contentMatch[1].trim() : '';
+  if (!content) {
+    throw new Error('Jina returned no content for this page');
   }
 
-  let content = data.data.markdown || '';
   if (content.length > MAX_CONTENT_LENGTH) {
     content = content.substring(0, MAX_CONTENT_LENGTH) + '... [truncated]';
   }
 
   return {
-    title: data.data.metadata?.title || '',
+    title: titleMatch ? titleMatch[1].trim() : '',
     content,
   };
 }
@@ -109,7 +108,7 @@ async function deepExtract(url, goal, locale) {
       }
 
       // Fetch page
-      const page = await firecrawlFetch(currentUrl);
+      const page = await jinaFetch(currentUrl);
       pagesVisited.push(currentUrl);
 
       // Build message for Gemini

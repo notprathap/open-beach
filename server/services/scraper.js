@@ -3,53 +3,53 @@ const cheerio = require('cheerio');
 
 const MAX_CONTENT_LENGTH = 12000;
 
-// Firecrawl-based fetcher (handles JavaScript rendering)
-async function fetchWithFirecrawl(url) {
-  const apiKey = process.env.FIRECRAWL_API_KEY;
-  if (!apiKey) return null; // Fall back to cheerio
-
+// Jina Reader-based fetcher (free JS rendering, 1000 req/day)
+async function fetchWithJina(url) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20000);
 
   try {
-    const res = await fetch('https://api.firecrawl.dev/v1/scrape', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        url,
-        formats: ['markdown'],
-        waitFor: 3000,
-      }),
+    const headers = {
+      'Accept': 'text/markdown',
+      'X-No-Cache': 'true',
+    };
+
+    // Optional: use API key for higher rate limits if available
+    const jinaKey = process.env.JINA_API_KEY;
+    if (jinaKey) {
+      headers['Authorization'] = `Bearer ${jinaKey}`;
+    }
+
+    const res = await fetch(`https://r.jina.ai/${url}`, {
+      headers,
       signal: controller.signal,
     });
 
     if (!res.ok) {
-      const text = await res.text();
-      console.error(`Firecrawl error ${res.status}: ${text.substring(0, 200)}`);
       return null; // Fall back to cheerio
     }
 
-    const data = await res.json();
+    const text = await res.text();
 
-    if (!data.success || !data.data) {
-      return null; // Fall back to cheerio
+    // Parse Jina's response format: Title, URL Source, then Markdown Content
+    const titleMatch = text.match(/^Title:\s*(.+)/m);
+    const contentMatch = text.match(/Markdown Content:\s*\n([\s\S]*)/);
+
+    const title = titleMatch ? titleMatch[1].trim() : '';
+    let content = contentMatch ? contentMatch[1].trim() : '';
+
+    // If Jina returned no meaningful content, fall back
+    if (content.length < 100) {
+      return null;
     }
-
-    let content = data.data.markdown || '';
-    const title = data.data.metadata?.title || '';
-    const description = data.data.metadata?.description || '';
 
     if (content.length > MAX_CONTENT_LENGTH) {
       content = content.substring(0, MAX_CONTENT_LENGTH) + '... [truncated]';
     }
 
-    const fullContent = `Title: ${title}\nDescription: ${description}\n\n${content}`;
-    return { url, content: fullContent, error: null };
+    return { url, content: `Title: ${title}\n\n${content}`, error: null };
   } catch (err) {
-    console.error(`Firecrawl fetch failed for ${url}: ${err.message}`);
+    console.error(`Jina fetch failed for ${url}: ${err.message}`);
     return null; // Fall back to cheerio
   } finally {
     clearTimeout(timeout);
@@ -88,13 +88,9 @@ async function fetchWithCheerio(url) {
     $('script, style, noscript, iframe, svg, nav, footer, header').remove();
     $('[role="navigation"], [role="banner"], [aria-hidden="true"]').remove();
 
-    // Extract page title
     const title = $('title').text().trim();
-
-    // Extract meta description
     const metaDesc = $('meta[name="description"]').attr('content') || '';
 
-    // Get main content areas first, fall back to body
     let text = '';
     const mainSelectors = ['main', 'article', '[role="main"]', '.content', '#content', '.main'];
     for (const sel of mainSelectors) {
@@ -108,17 +104,13 @@ async function fetchWithCheerio(url) {
       text = $('body').text();
     }
 
-    // Collapse whitespace
     text = text.replace(/\s+/g, ' ').trim();
 
-    // Truncate
     if (text.length > MAX_CONTENT_LENGTH) {
       text = text.substring(0, MAX_CONTENT_LENGTH) + '... [truncated]';
     }
 
-    const fullContent = `Title: ${title}\nDescription: ${metaDesc}\n\n${text}`;
-
-    return { url, content: fullContent, error: null };
+    return { url, content: `Title: ${title}\nDescription: ${metaDesc}\n\n${text}`, error: null };
   } catch (err) {
     return { url, error: err.message, content: '' };
   } finally {
@@ -127,9 +119,9 @@ async function fetchWithCheerio(url) {
 }
 
 async function fetchPage(url) {
-  // Try Firecrawl first (handles JavaScript), fall back to cheerio
-  const firecrawlResult = await fetchWithFirecrawl(url);
-  if (firecrawlResult) return firecrawlResult;
+  // Try Jina Reader first (handles JavaScript), fall back to cheerio
+  const jinaResult = await fetchWithJina(url);
+  if (jinaResult) return jinaResult;
   return fetchWithCheerio(url);
 }
 
