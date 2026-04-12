@@ -593,11 +593,30 @@ body {
   margin-bottom: 8px;
 }
 
+.loading-progress-track {
+  width: 220px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  margin: 0 auto 16px;
+  overflow: hidden;
+}
+
+.loading-progress-bar {
+  height: 100%;
+  width: 0%;
+  background: var(--primary);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
 .loading-detail {
   font-size: 13px;
   color: var(--text-secondary);
-  max-width: 280px;
+  max-width: 320px;
   line-height: 1.4;
+  min-height: 1.4em;
+  transition: opacity 0.15s;
 }
 
 /* ---- No Results ---- */

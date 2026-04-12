@@ -57,16 +57,30 @@ router.post('/search', async (req, res) => {
 
     console.log(`Searching for ${searchType} near "${location}" (${lat}, ${lng}) from ${start} to ${end}`);
 
-    const results = await searchForSessions(location, lat, lng, { start, end }, (progress) => {
+    // Stream progress as NDJSON
+    res.setHeader('Content-Type', 'application/x-ndjson');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    const onProgress = (progress) => {
       console.log(`[Agent] ${progress.message}`);
-    }, searchType);
+      res.write(JSON.stringify({ type: 'progress', ...progress }) + '\n');
+    };
+
+    const results = await searchForSessions(location, lat, lng, { start, end }, onProgress, searchType);
 
     cache.set(cacheKey, results);
-
-    res.json({ results, cached: false });
+    res.write(JSON.stringify({ type: 'result', results, cached: false }) + '\n');
+    res.end();
   } catch (err) {
     console.error('Search error:', err);
-    res.status(500).json({ error: 'Search failed. Please try again.' });
+    if (res.headersSent) {
+      res.write(JSON.stringify({ type: 'error', error: 'Search failed. Please try again.' }) + '\n');
+      res.end();
+    } else {
+      res.status(500).json({ error: 'Search failed. Please try again.' });
+    }
   }
 });
 

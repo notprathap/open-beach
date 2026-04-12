@@ -32,24 +32,41 @@ module.exports = async function handler(req, res) {
     const start = dateRange?.start || todayISO();
     const end = dateRange?.end || defaultEndDate(searchType);
 
-    // Check cache
+    // Check cache — return as plain JSON (no streaming needed)
     const cacheKey = cache.key(searchType, location, start, end);
     const cached = cache.get(cacheKey);
     if (cached) {
       return res.json({ results: cached, cached: true });
     }
 
+    // Stream progress as NDJSON
+    res.setHeader('Content-Type', 'application/x-ndjson');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    const onProgress = (progress) => {
+      res.write(JSON.stringify({ type: 'progress', ...progress }) + '\n');
+    };
+
     const results = await searchForSessions(
       location, parseFloat(lat), parseFloat(lng),
       { start, end },
-      null, // no SSE progress on serverless
+      onProgress,
       searchType
     );
 
     cache.set(cacheKey, results);
-    res.json({ results, cached: false });
+    res.write(JSON.stringify({ type: 'result', results, cached: false }) + '\n');
+    res.end();
   } catch (err) {
     console.error('Search error:', err);
-    res.status(500).json({ error: 'Search failed: ' + err.message });
+    // If headers already sent (streaming), send error as NDJSON line
+    if (res.headersSent) {
+      res.write(JSON.stringify({ type: 'error', error: 'Search failed: ' + err.message }) + '\n');
+      res.end();
+    } else {
+      res.status(500).json({ error: 'Search failed: ' + err.message });
+    }
   }
 };

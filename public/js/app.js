@@ -187,7 +187,14 @@
     );
 
     try {
-      const data = await API.searchEvents(state.location, state.lat, state.lng, dateRange, state.activeTab);
+      const data = await API.searchEvents(state.location, state.lat, state.lng, dateRange, state.activeTab, (progress) => {
+        if (progress.message) {
+          updateLoadingDetail(progress.message);
+        }
+        if (progress.progress && progress.maxProgress) {
+          updateLoadingProgress(progress.progress, progress.maxProgress);
+        }
+      });
       state.results = data.results || [];
 
       // Cache results for this tab
@@ -305,11 +312,20 @@
   // ---- UI Helpers ----
   function showLoading(text) {
     els.loadingText.textContent = text || 'Loading...';
+    const bar = document.getElementById('loading-progress');
+    if (bar) bar.style.width = '0%';
     els.loadingOverlay.classList.remove('hidden');
   }
 
   function updateLoadingDetail(text) {
     els.loadingDetail.textContent = text;
+  }
+
+  function updateLoadingProgress(current, max) {
+    let bar = document.getElementById('loading-progress');
+    if (!bar) return;
+    const pct = Math.round((current / max) * 100);
+    bar.style.width = pct + '%';
   }
 
   function hideLoading() {
