@@ -47,6 +47,13 @@ Open play sessions go by many names:
 - Pay-and-play
 - Walk-in sessions
 
+## Booking Platforms
+
+Many venues use platforms like Eversports, Playtomic, or Matchi for bookings. The booking calendar widgets are often embedded as iframes and may not be scrapable. When you encounter these:
+- Look for the venue's training/info/schedule page OUTSIDE the booking widget — it usually lists recurring session times
+- Extract the recurring pattern (e.g., "Fridays 17:00-19:00") and convert to specific dates within the requested date range
+- Include the booking page URL so users can book directly
+
 ## Important Rules
 
 - Make AT LEAST 8 different web searches with varied queries to be thorough
@@ -55,6 +62,7 @@ Open play sessions go by many names:
 - ALWAYS search in the local language of the city in addition to English
 - Extract SPECIFIC dates, times, and prices when available
 - Include the booking/registration URL so users can sign up
+- NEVER skip a venue that has open play sessions just because you only found a recurring pattern — convert it to specific dates
 - If a venue has a calendar or schedule page, fetch that specific page
 - If you find a venue but can't determine specific open play times, still include it with a note
 
@@ -86,7 +94,11 @@ After all your research, provide your final answer as a JSON array. Each item mu
 ]
 \`\`\`
 
-If you cannot determine exact coordinates, estimate from the address. If you cannot determine exact event dates within the requested range, include the venue with its regular schedule pattern in the notes field (e.g., "Every Tuesday and Thursday 18:00-20:00").
+If you cannot determine exact coordinates, estimate from the address.
+
+IMPORTANT: When a venue has a recurring schedule (e.g., "every Friday 17:00-19:00" or "FREITAGS 18:00 UHR"), you MUST generate individual event entries for each specific date that falls within the requested date range. For example, if the date range is 2026-04-12 to 2026-04-26 and sessions run "every Friday", create events for 2026-04-17 and 2026-04-24. Do NOT skip venues just because they only show recurring patterns instead of specific dates — convert them to dates.
+
+If a venue has open play sessions but you truly cannot determine any schedule pattern, still include the venue with a note explaining what you found and a booking URL.
 
 Return ONLY the JSON array as your final response, no other text.`;
 }
@@ -180,7 +192,11 @@ After all your research, provide your final answer as a JSON array. Each item mu
 ]
 \`\`\`
 
-If you cannot determine exact coordinates, estimate from the address. If you cannot determine exact event dates within the requested range, include the tournament with available schedule information in the notes field.
+If you cannot determine exact coordinates, estimate from the address.
+
+IMPORTANT: When a venue has a recurring tournament schedule (e.g., "every Saturday"), generate individual event entries for each specific date within the requested date range. Do NOT skip venues just because they only show recurring patterns — convert them to specific dates.
+
+If a tournament venue is discovered but you cannot determine any schedule, still include it with a note and registration URL.
 
 Return ONLY the JSON array as your final response, no other text.`;
 }
