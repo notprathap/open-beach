@@ -1,0 +1,692 @@
+/* ============================================
+   Open Beach - Beach Volleyball Session Finder
+   Mobile-first responsive design
+   ============================================ */
+
+:root {
+  --primary: #1a73e8;
+  --primary-dark: #1557b0;
+  --primary-light: #e8f0fe;
+  --accent: #f4a623;
+  --accent-dark: #d4911e;
+  --bg: #f5f7fa;
+  --surface: #ffffff;
+  --text: #1a1a2e;
+  --text-secondary: #5f6368;
+  --text-light: #9aa0a6;
+  --border: #e0e3e8;
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.12);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- Header ---- */
+.app-header {
+  background: var(--primary);
+  color: white;
+  padding: calc(8px + var(--safe-top)) 16px 8px;
+  flex-shrink: 0;
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.logo-icon {
+  font-size: 24px;
+}
+
+.logo h1 {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+
+/* ---- Location Bar ---- */
+.location-bar {
+  background: var(--surface);
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.location-input-wrapper {
+  display: flex;
+  align-items: center;
+  background: var(--bg);
+  border-radius: var(--radius);
+  padding: 0 12px;
+  max-width: 1200px;
+  margin: 0 auto;
+  border: 2px solid transparent;
+  transition: border-color 0.2s;
+}
+
+.location-input-wrapper:focus-within {
+  border-color: var(--primary);
+  background: var(--surface);
+}
+
+.icon-search {
+  width: 20px;
+  height: 20px;
+  color: var(--text-light);
+  flex-shrink: 0;
+}
+
+#location-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 12px 10px;
+  font-size: 16px;
+  color: var(--text);
+  outline: none;
+}
+
+#location-input::placeholder {
+  color: var(--text-light);
+}
+
+.gps-button {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: var(--primary);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+
+.gps-button:hover {
+  background: var(--primary-dark);
+}
+
+.gps-button:active {
+  transform: scale(0.95);
+}
+
+.gps-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.gps-button.loading {
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ---- Date Filter ---- */
+.date-filter {
+  display: flex;
+  gap: 6px;
+  padding: 10px 16px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.date-filter::-webkit-scrollbar {
+  display: none;
+}
+
+.date-btn {
+  flex-shrink: 0;
+  padding: 8px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 20px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.date-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.date-btn.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: white;
+}
+
+.date-btn .day-name {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.date-btn .day-num {
+  display: block;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+/* ---- View Toggle ---- */
+.view-toggle {
+  display: flex;
+  padding: 8px 16px;
+  gap: 4px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.toggle-btn {
+  flex: 1;
+  padding: 8px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.toggle-btn.active {
+  background: var(--primary);
+  color: white;
+}
+
+.toggle-btn:not(.active):hover {
+  background: var(--bg);
+}
+
+/* ---- View Panels ---- */
+.view-panel {
+  display: none;
+  flex: 1;
+  min-height: 0;
+}
+
+.view-panel.active {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- Map ---- */
+#map {
+  flex: 1;
+  z-index: 1;
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: var(--radius) !important;
+  box-shadow: var(--shadow-lg) !important;
+}
+
+.leaflet-popup-content {
+  margin: 14px 16px !important;
+  font-family: inherit !important;
+  line-height: 1.5 !important;
+}
+
+.marker-popup {
+  min-width: 200px;
+}
+
+.marker-popup h3 {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: var(--text);
+}
+
+.marker-popup .popup-address {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.marker-popup .popup-events {
+  margin-bottom: 10px;
+}
+
+.marker-popup .popup-event {
+  font-size: 13px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.marker-popup .popup-event:last-child {
+  border-bottom: none;
+}
+
+.marker-popup .popup-price {
+  font-size: 13px;
+  color: var(--accent-dark);
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.marker-popup .popup-book-btn {
+  display: block;
+  text-align: center;
+  padding: 8px 16px;
+  background: var(--primary);
+  color: white;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 0.2s;
+}
+
+.marker-popup .popup-book-btn:hover {
+  background: var(--primary-dark);
+}
+
+/* Volleyball marker icon */
+.volleyball-marker {
+  background: var(--primary);
+  border: 3px solid white;
+  border-radius: 50%;
+  width: 36px !important;
+  height: 36px !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  margin-left: -18px !important;
+  margin-top: -18px !important;
+}
+
+/* ---- List View ---- */
+.event-list {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 12px 16px;
+  padding-bottom: calc(12px + var(--safe-bottom));
+}
+
+.date-group-header {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 12px 0 6px;
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 2;
+}
+
+.event-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 10px;
+  box-shadow: var(--shadow);
+  transition: transform 0.2s, box-shadow 0.2s;
+  cursor: pointer;
+}
+
+.event-card:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-lg);
+}
+
+.event-card:active {
+  transform: scale(0.99);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.card-venue {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.card-price {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent-dark);
+  background: #fff3e0;
+  padding: 3px 10px;
+  border-radius: 12px;
+  white-space: nowrap;
+}
+
+.card-address {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+
+.card-events {
+  margin-bottom: 12px;
+}
+
+.card-event-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 14px;
+}
+
+.card-event-row .event-time {
+  font-weight: 600;
+  color: var(--primary);
+  min-width: 100px;
+}
+
+.card-event-row .event-title {
+  color: var(--text-secondary);
+}
+
+.card-notes {
+  font-size: 12px;
+  color: var(--text-light);
+  font-style: italic;
+  margin-bottom: 10px;
+  line-height: 1.4;
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.book-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 16px;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.book-btn:hover {
+  background: var(--primary-dark);
+}
+
+.map-btn {
+  padding: 10px 16px;
+  background: var(--bg);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.map-btn:hover {
+  background: var(--primary-light);
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+/* ---- Empty State ---- */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+  text-align: center;
+  color: var(--text-light);
+}
+
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.6;
+}
+
+.empty-state p {
+  font-size: 15px;
+  line-height: 1.5;
+  max-width: 280px;
+}
+
+/* ---- Loading Overlay ---- */
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  transition: opacity 0.3s;
+}
+
+.loading-overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.loading-content {
+  text-align: center;
+  padding: 24px;
+}
+
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 20px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+#loading-text {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.loading-detail {
+  font-size: 13px;
+  color: var(--text-secondary);
+  max-width: 280px;
+  line-height: 1.4;
+}
+
+/* ---- No Results ---- */
+.no-results {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.no-results h3 {
+  font-size: 18px;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+
+.no-results p {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* ---- Error Toast ---- */
+.error-toast {
+  position: fixed;
+  bottom: calc(20px + var(--safe-bottom));
+  left: 16px;
+  right: 16px;
+  background: #d32f2f;
+  color: white;
+  padding: 14px 18px;
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 2000;
+  box-shadow: var(--shadow-lg);
+  animation: slideUp 0.3s ease-out;
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* ---- Responsive: Tablet+ (side-by-side layout) ---- */
+@media (min-width: 768px) {
+  .app-header {
+    padding: 12px 24px;
+  }
+
+  .location-bar {
+    padding: 12px 24px;
+  }
+
+  .date-filter {
+    padding: 10px 24px;
+    justify-content: center;
+  }
+
+  .view-toggle {
+    display: none;
+  }
+
+  .view-panel {
+    display: flex !important;
+    flex-direction: column;
+  }
+
+  /* Side-by-side layout container */
+  #map-container,
+  #list-container {
+    position: absolute;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .split-view {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .split-view #map-container {
+    position: relative;
+    flex: 1;
+  }
+
+  .split-view #list-container {
+    position: relative;
+    width: 400px;
+    border-left: 1px solid var(--border);
+    background: var(--bg);
+  }
+
+  .event-list {
+    padding: 16px 20px;
+  }
+
+  .event-card {
+    padding: 18px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .split-view #list-container {
+    width: 460px;
+  }
+}
+
+/* ---- Cluster icons ---- */
+.marker-cluster-small,
+.marker-cluster-medium,
+.marker-cluster-large {
+  background: rgba(26, 115, 232, 0.2) !important;
+}
+
+.marker-cluster-small div,
+.marker-cluster-medium div,
+.marker-cluster-large div {
+  background: var(--primary) !important;
+  color: white !important;
+  font-weight: 700 !important;
+}
