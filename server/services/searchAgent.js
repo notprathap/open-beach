@@ -1,6 +1,7 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const { search: webSearch } = require('./webSearch');
 const { fetchPage } = require('./scraper');
+const { deepExtract } = require('./deepExtract');
 const { getPromptForType } = require('../utils/prompts');
 const { localeFromCoords, getLocalQueries } = require('../utils/locale');
 
@@ -35,6 +36,24 @@ const tools = [
       required: ['url'],
     },
   },
+  {
+    name: 'deep_extract',
+    description: 'Deep-extract schedule data from a JavaScript-heavy venue website that requires multi-step navigation (e.g., SPA booking systems, sites with "Book Now" flows). This tool automatically navigates through the site following booking/schedule links and extracts structured session data. Use this INSTEAD of fetch_webpage when: (1) fetch_webpage returned empty or boilerplate content, (2) the site appears to use a modern booking platform, or (3) search snippets suggest schedule data requires clicking through multiple pages.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        url: {
+          type: 'string',
+          description: 'The venue homepage or starting URL',
+        },
+        goal: {
+          type: 'string',
+          description: 'What to find, e.g., "beach volleyball open play session schedule and booking links"',
+        },
+      },
+      required: ['url', 'goal'],
+    },
+  },
 ];
 
 function makeExecuteTool(locale) {
@@ -50,6 +69,13 @@ function makeExecuteTool(locale) {
           return `Error fetching ${result.url}: ${result.error}`;
         }
         return result.content;
+      }
+      case 'deep_extract': {
+        const result = await deepExtract(toolInput.url, toolInput.goal, locale);
+        if (result.error && result.scheduleData.length === 0) {
+          return `Deep extraction from ${toolInput.url} failed: ${result.error}. Pages visited: ${result.pagesVisited.join(', ')}`;
+        }
+        return JSON.stringify(result.scheduleData, null, 2);
       }
       default:
         return `Unknown tool: ${toolName}`;
@@ -155,7 +181,9 @@ Today's date is ${today}.`;
           stage: 'searching',
           message: toolUse.name === 'web_search'
             ? `Searching: "${toolUse.input.query}"`
-            : `Reading: ${toolUse.input.url}`,
+            : toolUse.name === 'deep_extract'
+              ? `Deep scanning: ${toolUse.input.url}`
+              : `Reading: ${toolUse.input.url}`,
           progress: toolCallCount,
           maxProgress: MAX_TOOL_CALLS,
         });

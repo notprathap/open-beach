@@ -3,7 +3,61 @@ const cheerio = require('cheerio');
 
 const MAX_CONTENT_LENGTH = 12000;
 
-async function fetchPage(url) {
+// Firecrawl-based fetcher (handles JavaScript rendering)
+async function fetchWithFirecrawl(url) {
+  const apiKey = process.env.FIRECRAWL_API_KEY;
+  if (!apiKey) return null; // Fall back to cheerio
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20000);
+
+  try {
+    const res = await fetch('https://api.firecrawl.dev/v1/scrape', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url,
+        formats: ['markdown'],
+        waitFor: 3000,
+      }),
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.error(`Firecrawl error ${res.status}: ${text.substring(0, 200)}`);
+      return null; // Fall back to cheerio
+    }
+
+    const data = await res.json();
+
+    if (!data.success || !data.data) {
+      return null; // Fall back to cheerio
+    }
+
+    let content = data.data.markdown || '';
+    const title = data.data.metadata?.title || '';
+    const description = data.data.metadata?.description || '';
+
+    if (content.length > MAX_CONTENT_LENGTH) {
+      content = content.substring(0, MAX_CONTENT_LENGTH) + '... [truncated]';
+    }
+
+    const fullContent = `Title: ${title}\nDescription: ${description}\n\n${content}`;
+    return { url, content: fullContent, error: null };
+  } catch (err) {
+    console.error(`Firecrawl fetch failed for ${url}: ${err.message}`);
+    return null; // Fall back to cheerio
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// Cheerio-based fetcher (fallback for static HTML)
+async function fetchWithCheerio(url) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15000);
 
@@ -70,6 +124,13 @@ async function fetchPage(url) {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function fetchPage(url) {
+  // Try Firecrawl first (handles JavaScript), fall back to cheerio
+  const firecrawlResult = await fetchWithFirecrawl(url);
+  if (firecrawlResult) return firecrawlResult;
+  return fetchWithCheerio(url);
 }
 
 module.exports = { fetchPage };

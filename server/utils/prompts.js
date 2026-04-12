@@ -31,6 +31,8 @@ You must be thorough and methodical. Follow these steps:
 
 5. **Follow promising links**: When search results show venue websites, booking platforms, or event pages, fetch those pages to extract detailed schedule information.
 
+6. **Deep extraction for booking sites**: When you encounter a venue website that uses a modern booking system, SPA, or requires navigating through multiple pages (e.g., "Book now" → "Group sessions" → "Open play"), use the deep_extract tool instead of fetch_webpage. Also use deep_extract when fetch_webpage returns mostly empty or boilerplate content — this usually means the site requires JavaScript rendering.
+
 ## What to Look For
 
 Open play sessions go by many names:
@@ -122,6 +124,8 @@ You must be thorough and methodical. Follow these steps:
    Adapt to the local language of the city.
 
 5. **Follow promising links**: When search results show tournament pages, federation sites, or event pages, fetch those pages to extract detailed information.
+
+6. **Deep extraction for booking sites**: When you encounter a venue website that uses a modern booking system, SPA, or requires navigating through multiple pages, use the deep_extract tool instead of fetch_webpage. Also use deep_extract when fetch_webpage returns mostly empty or boilerplate content — this usually means the site requires JavaScript rendering.
 
 ## What to Look For
 
