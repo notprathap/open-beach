@@ -1,50 +1,42 @@
 const fetch = require('node-fetch');
+const fs = require('fs');
 
 const MAX_PAGES = 5;
-const TIMEOUT_MS = 25000;
-const MAX_CONTENT_LENGTH = 10000;
+const TIMEOUT_MS = 30000;
 
-// Fetch a page via Jina Reader (free JS rendering)
-async function jinaFetch(url) {
-  const headers = {
-    'Accept': 'text/markdown',
-    'X-No-Cache': 'true',
-  };
-  const jinaKey = process.env.JINA_API_KEY;
-  if (jinaKey) {
-    headers['Authorization'] = `Bearer ${jinaKey}`;
-  }
-
-  const res = await fetch(`https://r.jina.ai/${url}`, {
-    headers,
-    timeout: 12000,
-  });
-
-  if (!res.ok) {
-    throw new Error(`Jina error ${res.status}`);
-  }
-
-  const text = await res.text();
-  const titleMatch = text.match(/^Title:\s*(.+)/m);
-  const contentMatch = text.match(/Markdown Content:\s*\n([\s\S]*)/);
-
-  let content = contentMatch ? contentMatch[1].trim() : '';
-  if (!content) {
-    throw new Error('Jina returned no content for this page');
-  }
-
-  if (content.length > MAX_CONTENT_LENGTH) {
-    content = content.substring(0, MAX_CONTENT_LENGTH) + '... [truncated]';
-  }
-
-  return {
-    title: titleMatch ? titleMatch[1].trim() : '',
-    content,
-  };
+let chromium;
+try {
+  chromium = require('playwright').chromium;
+} catch {
+  chromium = null;
 }
 
-// Ask Gemini Flash Lite to analyze a page and decide next action
-async function askGemini(messages) {
+// Launch a stealth browser page
+async function launchPage() {
+  if (!chromium) throw new Error('Playwright not installed');
+  const browser = await chromium.launch({
+    args: ['--disable-blink-features=AutomationControlled'],
+  });
+  const context = await browser.newContext({
+    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    viewport: { width: 1400, height: 900 },
+    locale: 'de-DE',
+  });
+  const page = await context.newPage();
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'webdriver', { get: () => false });
+  });
+  return { browser, page };
+}
+
+// Take a screenshot and return as base64
+async function screenshotPage(page) {
+  const buffer = await page.screenshot({ fullPage: true, type: 'jpeg', quality: 70 });
+  return buffer.toString('base64');
+}
+
+// Ask Gemini Flash Lite to analyze a screenshot
+async function askGemini(imageBase64, prompt) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY not configured');
 
@@ -54,14 +46,20 @@ async function askGemini(messages) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: messages,
+        contents: [{
+          role: 'user',
+          parts: [
+            { inlineData: { mimeType: 'image/jpeg', data: imageBase64 } },
+            { text: prompt },
+          ],
+        }],
         generationConfig: {
           temperature: 0,
-          maxOutputTokens: 2048,
+          maxOutputTokens: 4096,
           responseMimeType: 'application/json',
         },
       }),
-      timeout: 10000,
+      timeout: 15000,
     }
   );
 
@@ -77,90 +75,82 @@ async function askGemini(messages) {
   return JSON.parse(text);
 }
 
-const SYSTEM_INSTRUCTION = `You are a website navigator extracting sports session schedules.
-You will be shown a web page's content in Markdown format. Your job is to find volleyball open play / pickup / drop-in session schedules.
+const EXTRACT_PROMPT = `Look at this webpage screenshot. Find any beach volleyball open play / pickup / drop-in session schedules.
 
 Respond with JSON in one of these formats:
 
-If you can see schedule data on this page:
+If you can see schedule data (dates, times, session names):
 {"action": "extract", "data": [{"date": "2026-04-15", "startTime": "18:00", "endTime": "20:00", "title": "Open Play", "price": "€10"}]}
-Use actual dates if visible. If only a recurring pattern is shown (e.g., "every Tuesday"), set date to "recurring" and add a "pattern" field.
+If you see a recurring pattern (e.g., "every Friday"), list a maximum of 4 upcoming dates. Keep data concise.
 
-If you need to follow a link to find schedules (e.g., a "Book now", "Schedule", "Open play", or "Sessions" link):
-{"action": "follow", "url": "https://full-url-to-follow"}
-Pick the most promising link. Only follow links that likely lead to session schedules.
+If the schedule is not visible but you can see a link/button that would lead to it (e.g., "Book now", "Schedule", "Open Play", "Buchen"):
+{"action": "click", "selector": "text=Book Now", "reason": "clicking booking button to find schedule"}
+Use a Playwright-compatible selector (text=..., or a CSS selector).
 
-If there is no schedule info and no useful links to follow:
+If there is no schedule info and no useful links:
 {"action": "not_found", "reason": "brief explanation"}`;
 
 async function deepExtract(url, goal, locale) {
+  if (!chromium) {
+    return { scheduleData: [], pagesVisited: [url], error: 'Playwright not available (required for deep extraction)' };
+  }
+
   const startTime = Date.now();
   const pagesVisited = [];
+  let browser;
 
   try {
-    let currentUrl = url;
-    const geminiMessages = [];
+    const launched = await launchPage();
+    browser = launched.browser;
+    const page = launched.page;
+
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
+
+    // Dismiss cookie dialogs
+    try { await page.click('text=OK', { timeout: 2000 }); } catch {}
+    try { await page.click('text=Accept', { timeout: 1000 }); } catch {}
+
+    await page.waitForTimeout(3000);
+    pagesVisited.push(url);
 
     for (let i = 0; i < MAX_PAGES; i++) {
-      // Check timeout
-      if (Date.now() - startTime > TIMEOUT_MS) {
-        break;
-      }
+      if (Date.now() - startTime > TIMEOUT_MS) break;
 
-      // Fetch page
-      const page = await jinaFetch(currentUrl);
-      pagesVisited.push(currentUrl);
+      const screenshot = await screenshotPage(page);
+      const prompt = i === 0
+        ? `${EXTRACT_PROMPT}\n\nGoal: ${goal}\nCurrent URL: ${page.url()}`
+        : `${EXTRACT_PROMPT}\n\nGoal: ${goal}\nI navigated to: ${page.url()}`;
 
-      // Build message for Gemini
-      const userMessage = i === 0
-        ? `Goal: ${goal}\nStarting URL: ${currentUrl}\nPage title: ${page.title}\n\nPage content:\n${page.content}`
-        : `I followed the link to: ${currentUrl}\nPage title: ${page.title}\n\nPage content:\n${page.content}`;
-
-      geminiMessages.push({ role: 'user', parts: [{ text: userMessage }] });
-
-      // Ask Gemini what to do
-      const decision = await askGemini([
-        { role: 'user', parts: [{ text: SYSTEM_INSTRUCTION }] },
-        { role: 'model', parts: [{ text: 'Understood. Show me the page content and I will analyze it.' }] },
-        ...geminiMessages,
-      ]);
+      const decision = await askGemini(screenshot, prompt);
 
       if (decision.action === 'extract') {
-        return {
-          scheduleData: decision.data || [],
-          pagesVisited,
-          error: null,
-        };
+        return { scheduleData: decision.data || [], pagesVisited, error: null };
       }
 
-      if (decision.action === 'follow' && decision.url) {
-        // Prevent visiting the same page twice
-        if (pagesVisited.includes(decision.url)) {
-          break;
+      if (decision.action === 'click' && decision.selector) {
+        try {
+          await page.click(decision.selector, { timeout: 5000 });
+          await page.waitForTimeout(3000);
+          pagesVisited.push(page.url());
+        } catch (e) {
+          return { scheduleData: [], pagesVisited, error: `Could not click "${decision.selector}": ${e.message}` };
         }
-        currentUrl = decision.url;
-        geminiMessages.push({
-          role: 'model',
-          parts: [{ text: JSON.stringify(decision) }],
-        });
         continue;
       }
 
-      // not_found or unknown action
+      // not_found
       break;
     }
 
     return {
       scheduleData: [],
       pagesVisited,
-      error: pagesVisited.length >= MAX_PAGES ? 'Max pages reached without finding schedule' : 'No schedule data found',
+      error: 'No schedule data found after navigating the site',
     };
   } catch (err) {
-    return {
-      scheduleData: [],
-      pagesVisited,
-      error: err.message,
-    };
+    return { scheduleData: [], pagesVisited, error: err.message };
+  } finally {
+    if (browser) await browser.close().catch(() => {});
   }
 }
 

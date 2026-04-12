@@ -110,6 +110,18 @@ async function fetchWithCheerio(url) {
       text = text.substring(0, MAX_CONTENT_LENGTH) + '... [truncated]';
     }
 
+    // Detect booking widget iframes and append their URLs
+    const iframeSrcs = [];
+    $('iframe').each((_, el) => {
+      const src = $(el).attr('src') || '';
+      if (src.includes('eversports') || src.includes('playtomic') || src.includes('matchi') || src.includes('mycourt')) {
+        iframeSrcs.push(src);
+      }
+    });
+    if (iframeSrcs.length > 0) {
+      text += '\n\n[Booking widget iframes detected: ' + iframeSrcs.join(' , ') + ']';
+    }
+
     return { url, content: `Title: ${title}\nDescription: ${metaDesc}\n\n${text}`, error: null };
   } catch (err) {
     return { url, error: err.message, content: '' };
