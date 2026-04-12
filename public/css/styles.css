@@ -158,6 +158,40 @@ body {
   50% { opacity: 0.5; }
 }
 
+/* ---- Search Type Tabs ---- */
+.search-tabs {
+  display: flex;
+  padding: 0 16px;
+  gap: 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 12px 8px;
+  border: none;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.tab-btn.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+.tab-btn:not(.active):hover {
+  color: var(--text);
+  background: var(--bg);
+}
+
 /* ---- Date Filter ---- */
 .date-filter {
   display: flex;
@@ -616,6 +650,12 @@ body {
 
   .location-bar {
     padding: 12px 24px;
+  }
+
+  .search-tabs {
+    padding: 0 24px;
+    max-width: 400px;
+    margin: 0 auto;
   }
 
   .date-filter {

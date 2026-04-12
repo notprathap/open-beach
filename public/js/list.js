@@ -6,15 +6,29 @@ const ListView = {
     this.container = document.getElementById(containerId);
   },
 
-  render(results, onMapClick) {
+  render(results, onMapClick, options = {}) {
     if (!results || results.length === 0) {
-      this.container.innerHTML = `
-        <div class="no-results">
-          <div class="empty-icon">🔍</div>
-          <h3>No sessions found</h3>
-          <p>No open play sessions found for the selected dates. Try expanding your date range or searching a different area.</p>
-        </div>
-      `;
+      const isTournament = options.type === 'tournaments';
+      const noResults = document.createElement('div');
+      noResults.className = 'no-results';
+
+      const icon = document.createElement('div');
+      icon.className = 'empty-icon';
+      icon.textContent = isTournament ? '🏆' : '🔍';
+
+      const heading = document.createElement('h3');
+      heading.textContent = isTournament ? 'No tournaments found' : 'No sessions found';
+
+      const desc = document.createElement('p');
+      desc.textContent = isTournament
+        ? 'No tournaments found for the selected months. Try expanding your date range or searching a different area.'
+        : 'No open play sessions found for the selected dates. Try expanding your date range or searching a different area.';
+
+      noResults.appendChild(icon);
+      noResults.appendChild(heading);
+      noResults.appendChild(desc);
+      this.container.textContent = '';
+      this.container.appendChild(noResults);
       return;
     }
 

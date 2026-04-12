@@ -1,10 +1,10 @@
 // HTTP client for backend API
 const API = {
-  async searchEvents(location, lat, lng, dateRange) {
+  async searchEvents(location, lat, lng, dateRange, type = 'openplay') {
     const res = await fetch('/api/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ location, lat, lng, dateRange }),
+      body: JSON.stringify({ location, lat, lng, dateRange, type }),
       signal: AbortSignal.timeout(120000),
     });
 

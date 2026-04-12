@@ -1,12 +1,12 @@
 class Cache {
-  constructor(defaultTTL = 60 * 60 * 1000) {
+  constructor(defaultTTL = 24 * 60 * 60 * 1000) {
     this.store = new Map();
     this.defaultTTL = defaultTTL;
     setInterval(() => this.cleanup(), 10 * 60 * 1000);
   }
 
-  key(location, startDate, endDate) {
-    return `${location.toLowerCase().trim()}|${startDate}|${endDate}`;
+  key(type, location, startDate, endDate) {
+    return `${type}|${location.toLowerCase().trim()}|${startDate}|${endDate}`;
   }
 
   get(k) {

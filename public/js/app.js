@@ -9,6 +9,11 @@
     results: [],
     currentView: 'map',
     isSearching: false,
+    activeTab: 'openplay', // 'openplay' | 'tournaments'
+    cachedResults: {
+      openplay: null,
+      tournaments: null,
+    },
   };
 
   const els = {
@@ -21,6 +26,7 @@
     loadingOverlay: document.getElementById('loading-overlay'),
     loadingText: document.getElementById('loading-text'),
     loadingDetail: document.getElementById('loading-detail'),
+    searchTabs: document.getElementById('search-tabs'),
   };
 
   // ---- Initialize ----
@@ -58,6 +64,49 @@
     els.gpsBtn.addEventListener('click', handleGPSClick);
     els.btnMap.addEventListener('click', () => switchView('map'));
     els.btnList.addEventListener('click', () => switchView('list'));
+
+    // Tab switching
+    els.searchTabs.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => handleTabSwitch(btn.dataset.tab));
+    });
+  }
+
+  // ---- Tabs ----
+  function handleTabSwitch(tab) {
+    if (tab === state.activeTab) return;
+
+    if (state.isSearching) {
+      showError('Please wait for the current search to complete.');
+      return;
+    }
+
+    state.activeTab = tab;
+
+    // Update tab button active states
+    els.searchTabs.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.tab === tab);
+    });
+
+    // Switch filter mode
+    if (tab === 'tournaments') {
+      Filters.setMode('months');
+    } else {
+      Filters.setMode('days');
+    }
+
+    // Check if we have cached results for this tab + location
+    const cached = state.cachedResults[tab];
+    if (cached && cached.location === state.location) {
+      state.results = cached.results;
+      const filtered = filterResultsByDate(state.results);
+      renderResults(filtered);
+    } else {
+      state.results = [];
+      renderResults([]);
+      if (state.lat && state.lng) {
+        triggerSearch();
+      }
+    }
   }
 
   // ---- Location ----
@@ -80,6 +129,7 @@
         els.locationInput.value = state.location;
       }
 
+      state.cachedResults = { openplay: null, tournaments: null };
       Location.saveLocation({ ...state });
       triggerSearch();
     } catch (err) {
@@ -100,6 +150,7 @@
       state.lng = geo.lng;
       els.locationInput.value = query;
 
+      state.cachedResults = { openplay: null, tournaments: null };
       MapView.centerOn(geo.lat, geo.lng);
       Location.saveLocation({ ...state });
       triggerSearch();
@@ -126,31 +177,36 @@
 
     state.isSearching = true;
     const dateRange = Filters.getDateRange();
+    const isTournament = state.activeTab === 'tournaments';
 
-    showLoading('Searching for open play sessions...');
-    updateLoadingDetail('Our AI agent is searching venue websites, booking platforms, and event listings...');
+    showLoading(isTournament ? 'Searching for tournaments...' : 'Searching for open play sessions...');
+    updateLoadingDetail(
+      isTournament
+        ? 'Our AI agent is searching tournament platforms, federation sites, and event listings...'
+        : 'Our AI agent is searching venue websites, booking platforms, and event listings...'
+    );
 
     try {
-      const data = await API.searchEvents(state.location, state.lat, state.lng, dateRange);
+      const data = await API.searchEvents(state.location, state.lat, state.lng, dateRange, state.activeTab);
       state.results = data.results || [];
 
-      // Filter results by selected dates
+      // Cache results for this tab
+      state.cachedResults[state.activeTab] = {
+        location: state.location,
+        results: state.results,
+      };
+
       const filtered = filterResultsByDate(state.results);
-
-      MapView.setResults(filtered, (idx) => {
-        MapView.highlightVenue(idx, filtered);
-        switchView('map');
-      });
-
-      ListView.render(filtered, (idx) => {
-        switchView('map');
-        MapView.highlightVenue(idx, filtered);
-      });
+      renderResults(filtered);
 
       hideLoading();
 
       if (filtered.length === 0) {
-        showError('No open play sessions found. Try a different location or expand your dates.');
+        showError(
+          isTournament
+            ? 'No tournaments found. Try a different location or expand your date range.'
+            : 'No open play sessions found. Try a different location or expand your dates.'
+        );
       }
     } catch (err) {
       hideLoading();
@@ -161,35 +217,44 @@
   }
 
   function filterResultsByDate(results) {
-    const selectedDates = Filters.getSelectedDates();
-    if (selectedDates.size === 0) return results;
+    const selected = Filters.getSelectedDates();
+    if (selected.size === 0) return results;
+
+    const isMonthMode = state.activeTab === 'tournaments';
 
     return results.map(venue => {
       const filtered = { ...venue };
       if (venue.events && venue.events.length > 0) {
         filtered.events = venue.events.filter(e => {
           if (!e.date) return true; // Keep events without specific dates
-          return selectedDates.has(e.date);
+          if (isMonthMode) {
+            const monthKey = e.date.substring(0, 7); // "2026-04-15" -> "2026-04"
+            return selected.has(monthKey);
+          }
+          return selected.has(e.date);
         });
       }
       return filtered;
     }).filter(venue => {
-      // Keep venues that have matching events or no specific events
-      return !venue.events || venue.events.length === 0 || venue.events.some(e => true);
+      return !venue.events || venue.events.length === 0 || venue.events.some(() => true);
     });
+  }
+
+  function renderResults(filtered) {
+    MapView.setResults(filtered, (idx) => {
+      MapView.highlightVenue(idx, filtered);
+      switchView('map');
+    });
+    ListView.render(filtered, (idx) => {
+      switchView('map');
+      MapView.highlightVenue(idx, filtered);
+    }, { type: state.activeTab });
   }
 
   function onDateFilterChange() {
     if (state.results.length > 0) {
       const filtered = filterResultsByDate(state.results);
-      MapView.setResults(filtered, (idx) => {
-        MapView.highlightVenue(idx, filtered);
-        switchView('map');
-      });
-      ListView.render(filtered, (idx) => {
-        switchView('map');
-        MapView.highlightVenue(idx, filtered);
-      });
+      renderResults(filtered);
     } else if (state.lat && state.lng) {
       triggerSearch();
     }

@@ -4,10 +4,10 @@ const cheerio = require('cheerio');
 
 // ---- In-memory cache (persists across warm invocations on Vercel) ----
 const cache = new Map();
-const CACHE_TTL = 60 * 60 * 1000; // 1 hour
+const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 
-function getCacheKey(location, start, end) {
-  return `${location.toLowerCase().trim()}|${start}|${end}`;
+function getCacheKey(type, location, start, end) {
+  return `${type}|${location.toLowerCase().trim()}|${start}|${end}`;
 }
 
 // ---- Web search via Serper ----
@@ -78,8 +78,8 @@ async function fetchPage(url) {
   }
 }
 
-// ---- System prompt ----
-const SYSTEM_PROMPT = `You are an expert research agent specialized in finding beach volleyball open play sessions and pickup games. Your job is to exhaustively search the web to find ALL available open play / drop-in beach volleyball sessions near a given location for a given date range.
+// ---- System prompts ----
+const OPEN_PLAY_PROMPT = `You are an expert research agent specialized in finding beach volleyball open play sessions and pickup games. Your job is to exhaustively search the web to find ALL available open play / drop-in beach volleyball sessions near a given location for a given date range.
 
 ## Your Search Strategy
 
@@ -133,6 +133,65 @@ Return ONLY a JSON array:
 
 If you cannot determine exact coordinates, estimate from the address. If you cannot determine exact event dates, include the venue with its regular schedule pattern in the notes field. Return ONLY the JSON array.`;
 
+const TOURNAMENT_PROMPT = `You are an expert research agent specialized in finding beach volleyball tournaments, competitions, and leagues. Your job is to exhaustively search the web to find ALL upcoming beach volleyball tournaments near a given location for a given date range.
+
+## Your Search Strategy
+
+1. **Initial broad search**: Search for beach volleyball tournaments, competitions, and leagues in the target city/area.
+2. **Venue-specific searches**: Search for known beach volleyball venues and sports centers that host tournaments.
+3. **Platform searches**: Search on popular tournament and event platforms: smoothcomp.com, challengermode.com, Eventbrite, Facebook events, meetup.com, national volleyball federation websites, regional/state volleyball association sites, sportplaner.de (for German cities), playtomic.io, and local sports booking platforms.
+4. **Multilingual searches**: If the location is in a non-English-speaking area, ALSO search in the local language:
+   - German: "Beachvolleyball Turnier", "Beach Volleyball Meisterschaft", "Beachvolleyball Wettbewerb"
+   - Spanish: "torneo voley playa", "campeonato voley playa", "competición vóley playa"
+   - French: "tournoi beach volley", "compétition beach volley", "championnat beach volley"
+   - Portuguese: "torneio vôlei de praia", "campeonato vôlei de praia"
+   - Italian: "torneo beach volley", "campionato beach volley"
+   - Dutch: "beachvolleybal toernooi", "beachvolleybal competitie"
+   Adapt to the local language of the city.
+5. **Follow promising links**: Fetch tournament pages, federation sites, and event pages to extract detailed information.
+
+## What to Look For
+
+Tournaments and competitions go by many names: Tournaments, Competitions, Championships, Leagues, Series, Qualifiers, Ranking events, Amateur tournaments, Recreational/Fun tournaments, Corporate/Charity tournaments, King/Queen of the beach, 2v2/4v4/6v6 formats, Mixed/Men's/Women's divisions.
+
+## Rules
+
+- Make AT LEAST 5 different web searches with varied queries
+- Fetch AT LEAST 3-5 tournament/event pages to extract detailed information
+- ALWAYS search in the local language in addition to English
+- Extract SPECIFIC dates, times, registration deadlines, and entry fees when available
+- Include the registration/signup URL so users can register
+- Note the team format (2v2, 4v4, etc.) and skill level requirements
+- If you find a tournament series, include each individual event date
+
+## Output Format
+
+Return ONLY a JSON array:
+\`\`\`json
+[
+  {
+    "venueName": "Beach Arena Name",
+    "address": "Full street address",
+    "lat": 52.5200,
+    "lng": 13.4050,
+    "events": [
+      { "date": "2024-03-15", "startTime": "09:00", "endTime": "18:00", "title": "Spring Beach Volleyball Tournament 2v2" }
+    ],
+    "priceInfo": "€25 per team",
+    "bookingUrl": "https://tournament-registration.com/signup",
+    "source": "https://where-you-found-this.com",
+    "description": "Brief description of the tournament",
+    "notes": "Format: 2v2, Skill level: All levels, Registration deadline: March 10"
+  }
+]
+\`\`\`
+
+If you cannot determine exact coordinates, estimate from the address. If you cannot determine exact event dates, include the tournament with available schedule information in the notes field. Return ONLY the JSON array.`;
+
+function getPromptForType(type) {
+  return type === 'tournaments' ? TOURNAMENT_PROMPT : OPEN_PLAY_PROMPT;
+}
+
 // ---- Claude tools ----
 const tools = [
   {
@@ -156,13 +215,19 @@ const tools = [
 ];
 
 // ---- Agent loop ----
-async function runSearchAgent(location, lat, lng, dateRange) {
+async function runSearchAgent(location, lat, lng, dateRange, type = 'openplay') {
   const client = new Anthropic();
   const MAX_TOOL_CALLS = 20;
 
-  const userMessage = `Find all beach volleyball open play / pickup / drop-in sessions near ${location} (coordinates: ${lat}, ${lng}).
+  const today = new Date().toISOString().split('T')[0];
+  const userMessage = type === 'tournaments'
+    ? `Find all beach volleyball tournaments, competitions, and leagues near ${location} (coordinates: ${lat}, ${lng}).
 Date range: ${dateRange.start} to ${dateRange.end}
-Today's date is ${new Date().toISOString().split('T')[0]}.
+Today's date is ${today}.
+Be exhaustive. Search tournament platforms, national/regional federation sites, venue websites, and local event listings. Search in the local language as well as English. Note team formats (2v2, 4v4), skill levels, and registration deadlines.`
+    : `Find all beach volleyball open play / pickup / drop-in sessions near ${location} (coordinates: ${lat}, ${lng}).
+Date range: ${dateRange.start} to ${dateRange.end}
+Today's date is ${today}.
 Be exhaustive. Search venue websites, booking platforms, and local event listings. Search in the local language as well as English.`;
 
   const messages = [{ role: 'user', content: userMessage }];
@@ -172,7 +237,7 @@ Be exhaustive. Search venue websites, booking platforms, and local event listing
     const response = await client.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 8192,
-      system: SYSTEM_PROMPT,
+      system: getPromptForType(type),
       tools,
       messages,
     });
@@ -216,7 +281,7 @@ Be exhaustive. Search venue websites, booking platforms, and local event listing
   const final = await client.messages.create({
     model: 'claude-sonnet-4-20250514',
     max_tokens: 8192,
-    system: SYSTEM_PROMPT,
+    system: getPromptForType(type),
     messages,
   });
 
@@ -270,22 +335,31 @@ module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
   try {
-    const { location, lat, lng, dateRange } = req.body;
+    const { location, lat, lng, dateRange, type } = req.body;
     if (!location || lat == null || lng == null) {
       return res.status(400).json({ error: 'location, lat, and lng are required' });
     }
 
+    const searchType = type === 'tournaments' ? 'tournaments' : 'openplay';
     const start = dateRange?.start || new Date().toISOString().split('T')[0];
-    const end = dateRange?.end || (() => { const d = new Date(); d.setDate(d.getDate() + 7); return d.toISOString().split('T')[0]; })();
+    const end = dateRange?.end || (() => {
+      const d = new Date();
+      if (searchType === 'tournaments') {
+        d.setMonth(d.getMonth() + 3);
+      } else {
+        d.setDate(d.getDate() + 14);
+      }
+      return d.toISOString().split('T')[0];
+    })();
 
     // Check cache
-    const cacheKey = getCacheKey(location, start, end);
+    const cacheKey = getCacheKey(searchType, location, start, end);
     const cached = cache.get(cacheKey);
     if (cached && Date.now() < cached.expiresAt) {
       return res.json({ results: cached.value, cached: true });
     }
 
-    const results = await runSearchAgent(location, lat, lng, { start, end });
+    const results = await runSearchAgent(location, lat, lng, { start, end }, searchType);
     cache.set(cacheKey, { value: results, expiresAt: Date.now() + CACHE_TTL });
 
     res.json({ results, cached: false });

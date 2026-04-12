@@ -1,7 +1,7 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const { search: webSearch } = require('./webSearch');
 const { fetchPage } = require('./scraper');
-const { getSearchAgentSystemPrompt } = require('../utils/prompts');
+const { getPromptForType } = require('../utils/prompts');
 
 const MAX_TOOL_CALLS = 20;
 
@@ -54,16 +54,25 @@ async function executeTool(toolName, toolInput) {
   }
 }
 
-async function searchForSessions(location, lat, lng, dateRange, onProgress) {
+async function searchForSessions(location, lat, lng, dateRange, onProgress, type = 'openplay') {
   const client = new Anthropic();
 
-  const userMessage = `Find all beach volleyball open play / pickup / drop-in sessions near ${location} (coordinates: ${lat}, ${lng}).
+  const today = new Date().toISOString().split('T')[0];
+  const userMessage = type === 'tournaments'
+    ? `Find all beach volleyball tournaments, competitions, and leagues near ${location} (coordinates: ${lat}, ${lng}).
+
+Date range to search: ${dateRange.start} to ${dateRange.end}
+
+Be exhaustive. Search tournament platforms, national/regional federation sites, venue websites, and local event listings. Search in the local language as well as English. Note team formats (2v2, 4v4), skill levels, and registration deadlines.
+
+Today's date is ${today}.`
+    : `Find all beach volleyball open play / pickup / drop-in sessions near ${location} (coordinates: ${lat}, ${lng}).
 
 Date range to search: ${dateRange.start} to ${dateRange.end}
 
 Be exhaustive in your search. Search venue websites, booking platforms (meetup.com, sportplaner.de, playtomic.io, etc.), and local event listings. Remember to search in the local language of this city as well as English. Fetch venue websites and calendar pages to get specific schedules and booking links.
 
-Today's date is ${new Date().toISOString().split('T')[0]}.`;
+Today's date is ${today}.`;
 
   const messages = [{ role: 'user', content: userMessage }];
   let toolCallCount = 0;
@@ -74,7 +83,7 @@ Today's date is ${new Date().toISOString().split('T')[0]}.`;
     const response = await client.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 8192,
-      system: getSearchAgentSystemPrompt(),
+      system: getPromptForType(type),
       tools,
       messages,
     });
@@ -144,7 +153,7 @@ Today's date is ${new Date().toISOString().split('T')[0]}.`;
   const finalResponse = await client.messages.create({
     model: 'claude-sonnet-4-20250514',
     max_tokens: 8192,
-    system: getSearchAgentSystemPrompt(),
+    system: getPromptForType(type),
     messages,
   });
 
