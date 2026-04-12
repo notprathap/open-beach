@@ -89,17 +89,13 @@ const Filters = {
         const date = btn.dataset.date;
 
         if (action === 'all') {
-          if (this.selectedDates.size === this.allDates.length) {
-            this.selectedDates.clear();
-          } else {
-            this.allDates.forEach(d => this.selectedDates.add(this.toISO(d)));
-          }
+          // Select all days
+          this.selectedDates.clear();
+          this.allDates.forEach(d => this.selectedDates.add(this.toISO(d)));
         } else if (date) {
-          if (this.selectedDates.has(date)) {
-            this.selectedDates.delete(date);
-          } else {
-            this.selectedDates.add(date);
-          }
+          // Single-select: show only this day
+          this.selectedDates.clear();
+          this.selectedDates.add(date);
         }
 
         this.renderDays();
@@ -166,17 +162,13 @@ const Filters = {
         const month = btn.dataset.month;
 
         if (action === 'all') {
-          if (this.selectedDates.size === this.months.length) {
-            this.selectedDates.clear();
-          } else {
-            this.months.forEach(m => this.selectedDates.add(this.toMonthKey(m)));
-          }
+          // Select all months
+          this.selectedDates.clear();
+          this.months.forEach(m => this.selectedDates.add(this.toMonthKey(m)));
         } else if (month) {
-          if (this.selectedDates.has(month)) {
-            this.selectedDates.delete(month);
-          } else {
-            this.selectedDates.add(month);
-          }
+          // Single-select: show only this month
+          this.selectedDates.clear();
+          this.selectedDates.add(month);
         }
 
         this.renderMonths();

@@ -243,7 +243,8 @@
       }
       return filtered;
     }).filter(venue => {
-      return !venue.events || venue.events.length === 0 || venue.events.some(() => true);
+      // Keep venues with no events (may have schedule info in notes) or with matching events
+      return !venue.events || venue.events.length > 0;
     });
   }
 
