@@ -1,8 +1,14 @@
 const fetch = require('node-fetch');
 
-async function search(query) {
+async function search(query, locale = null) {
   const apiKey = process.env.SERPER_API_KEY;
   if (!apiKey) throw new Error('SERPER_API_KEY not configured');
+
+  const body = { q: query, num: 20 };
+  if (locale) {
+    if (locale.gl) body.gl = locale.gl;
+    if (locale.hl) body.hl = locale.hl;
+  }
 
   const res = await fetch('https://google.serper.dev/search', {
     method: 'POST',
@@ -10,7 +16,7 @@ async function search(query) {
       'X-API-KEY': apiKey,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ q: query, num: 10 }),
+    body: JSON.stringify(body),
     timeout: 15000,
   });
 

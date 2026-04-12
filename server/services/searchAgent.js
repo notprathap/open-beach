@@ -2,8 +2,9 @@ const Anthropic = require('@anthropic-ai/sdk');
 const { search: webSearch } = require('./webSearch');
 const { fetchPage } = require('./scraper');
 const { getPromptForType } = require('../utils/prompts');
+const { localeFromCoords, getLocalQueries } = require('../utils/locale');
 
-const MAX_TOOL_CALLS = 20;
+const MAX_TOOL_CALLS = 35;
 
 const tools = [
   {
@@ -36,26 +37,30 @@ const tools = [
   },
 ];
 
-async function executeTool(toolName, toolInput) {
-  switch (toolName) {
-    case 'web_search': {
-      const results = await webSearch(toolInput.query);
-      return JSON.stringify(results, null, 2);
-    }
-    case 'fetch_webpage': {
-      const result = await fetchPage(toolInput.url);
-      if (result.error) {
-        return `Error fetching ${result.url}: ${result.error}`;
+function makeExecuteTool(locale) {
+  return async function executeTool(toolName, toolInput) {
+    switch (toolName) {
+      case 'web_search': {
+        const results = await webSearch(toolInput.query, locale);
+        return JSON.stringify(results, null, 2);
       }
-      return result.content;
+      case 'fetch_webpage': {
+        const result = await fetchPage(toolInput.url);
+        if (result.error) {
+          return `Error fetching ${result.url}: ${result.error}`;
+        }
+        return result.content;
+      }
+      default:
+        return `Unknown tool: ${toolName}`;
     }
-    default:
-      return `Unknown tool: ${toolName}`;
-  }
+  };
 }
 
 async function searchForSessions(location, lat, lng, dateRange, onProgress, type = 'openplay') {
   const client = new Anthropic();
+  const locale = localeFromCoords(lat, lng);
+  const executeTool = makeExecuteTool(locale);
 
   const today = new Date().toISOString().split('T')[0];
   const userMessage = type === 'tournaments'
@@ -75,6 +80,21 @@ Be exhaustive in your search. Search venue websites, booking platforms (meetup.c
 Today's date is ${today}.`;
 
   const messages = [{ role: 'user', content: userMessage }];
+
+  // Two-phase injection: force local-language queries before free-running
+  const localQueries = getLocalQueries(type, locale);
+  if (localQueries.length > 0) {
+    const cityName = location.split(',')[0].trim();
+    messages.push({
+      role: 'assistant',
+      content: [{ type: 'text', text: 'I\'ll search thoroughly for you. Let me start with local-language searches first.' }],
+    });
+    messages.push({
+      role: 'user',
+      content: [{ type: 'text', text: `REQUIRED: Before any other searches, you MUST call web_search for each of these local-language queries:\n${localQueries.map((q, i) => `${i + 1}. "${q} ${cityName}"`).join('\n')}\n\nRun all of these first, then continue with your standard English searches, venue-specific searches, and platform searches.` }],
+    });
+  }
+
   let toolCallCount = 0;
 
   if (onProgress) onProgress({ stage: 'starting', message: 'Starting search agent...' });
@@ -83,7 +103,7 @@ Today's date is ${today}.`;
     const response = await client.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 8192,
-      system: getPromptForType(type),
+      system: getPromptForType(type, locale),
       tools,
       messages,
     });
@@ -153,7 +173,7 @@ Today's date is ${today}.`;
   const finalResponse = await client.messages.create({
     model: 'claude-sonnet-4-20250514',
     max_tokens: 8192,
-    system: getPromptForType(type),
+    system: getPromptForType(type, locale),
     messages,
   });
 

@@ -1,3 +1,5 @@
+const { getLocalQueries } = require('./locale');
+
 function getSearchAgentSystemPrompt() {
   return `You are an expert research agent specialized in finding beach volleyball open play sessions and pickup games. Your job is to exhaustively search the web to find ALL available open play / drop-in beach volleyball sessions near a given location for a given date range.
 
@@ -45,7 +47,8 @@ Open play sessions go by many names:
 
 ## Important Rules
 
-- Make AT LEAST 5 different web searches with varied queries to be thorough
+- Make AT LEAST 8 different web searches with varied queries to be thorough
+- Issue AT LEAST 3 searches in the local language — this is MANDATORY, not optional
 - Fetch AT LEAST 3-5 venue/event pages to extract detailed information
 - ALWAYS search in the local language of the city in addition to English
 - Extract SPECIFIC dates, times, and prices when available
@@ -136,7 +139,8 @@ Tournaments and competitions go by many names:
 
 ## Important Rules
 
-- Make AT LEAST 5 different web searches with varied queries to be thorough
+- Make AT LEAST 8 different web searches with varied queries to be thorough
+- Issue AT LEAST 3 searches in the local language — this is MANDATORY, not optional
 - Fetch AT LEAST 3-5 tournament/event pages to extract detailed information
 - ALWAYS search in the local language of the city in addition to English
 - Extract SPECIFIC dates, times, registration deadlines, and entry fees when available
@@ -177,8 +181,18 @@ If you cannot determine exact coordinates, estimate from the address. If you can
 Return ONLY the JSON array as your final response, no other text.`;
 }
 
-function getPromptForType(type) {
-  return type === 'tournaments' ? getTournamentSearchPrompt() : getSearchAgentSystemPrompt();
+function buildLocaleSection(locale) {
+  if (!locale || locale.language === 'en') return '';
+  const openplayTerms = getLocalQueries('openplay', locale);
+  const tournamentTerms = getLocalQueries('tournaments', locale);
+  const allTerms = [...openplayTerms, ...tournamentTerms];
+  if (!allTerms.length) return '';
+  return `\n\n## Locale Context\nThe search location is in a ${locale.language}-speaking region (country: ${locale.countryCode.toUpperCase()}). You MUST issue multiple searches using local-language terms. Key terms to use: ${allTerms.join(', ')}. Combine these with the city name and specific venue names you discover.`;
+}
+
+function getPromptForType(type, locale = null) {
+  const base = type === 'tournaments' ? getTournamentSearchPrompt() : getSearchAgentSystemPrompt();
+  return base + buildLocaleSection(locale);
 }
 
 module.exports = { getSearchAgentSystemPrompt, getTournamentSearchPrompt, getPromptForType };
