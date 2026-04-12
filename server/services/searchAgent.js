@@ -100,6 +100,17 @@ Today's date is ${today}.`;
   if (onProgress) onProgress({ stage: 'starting', message: 'Starting search agent...' });
 
   while (toolCallCount < MAX_TOOL_CALLS) {
+    if (onProgress) {
+      onProgress({
+        stage: 'thinking',
+        message: toolCallCount === 0
+          ? 'Agent is planning search strategy...'
+          : `Agent is analyzing results and planning next steps... (${toolCallCount}/${MAX_TOOL_CALLS} actions)`,
+        progress: toolCallCount,
+        maxProgress: MAX_TOOL_CALLS,
+      });
+    }
+
     const response = await client.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 8192,
@@ -110,6 +121,9 @@ Today's date is ${today}.`;
 
     // Check if we're done (no more tool use)
     if (response.stop_reason === 'end_turn') {
+      if (onProgress) {
+        onProgress({ stage: 'parsing', message: 'Compiling results...' });
+      }
       // Extract final text response
       const textBlock = response.content.find(b => b.type === 'text');
       if (textBlock) {
@@ -165,6 +179,10 @@ Today's date is ${today}.`;
   }
 
   // If we hit max tool calls, ask for final answer
+  if (onProgress) {
+    onProgress({ stage: 'parsing', message: 'Maximum searches reached, compiling results...', progress: MAX_TOOL_CALLS, maxProgress: MAX_TOOL_CALLS });
+  }
+
   messages.push({
     role: 'user',
     content: [{ type: 'text', text: 'You have reached the maximum number of tool calls. Please provide your final JSON response now with all the sessions you have found so far.' }],
@@ -205,12 +223,14 @@ function parseAgentResponse(text) {
   try {
     const parsed = JSON.parse(jsonStr);
     if (Array.isArray(parsed)) {
+      console.log(`Parsed ${parsed.length} venues from agent response`);
       return parsed.map(normalizeResult);
     }
+    console.error('Agent response was valid JSON but not an array:', typeof parsed);
     return [];
   } catch (e) {
     console.error('Failed to parse agent response:', e.message);
-    console.error('Raw response:', text.substring(0, 500));
+    console.error('Raw response (first 1000 chars):', text.substring(0, 1000));
     return [];
   }
 }
