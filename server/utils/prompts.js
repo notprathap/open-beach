@@ -63,6 +63,7 @@ Many venues use platforms like Eversports, Playtomic, or Matchi for bookings. Th
 - Extract SPECIFIC dates, times, and prices when available
 - Include the booking/registration URL so users can sign up
 - NEVER skip a venue that has open play sessions just because you only found a recurring pattern — convert it to specific dates
+- If a venue page doesn't show specific session times (e.g., the schedule is in a booking widget you can't read), do a follow-up web_search for that venue's open play schedule (e.g., "beach61 open play schedule" or "beach61 open play donnerstag")
 - If a venue has a calendar or schedule page, fetch that specific page
 - If you find a venue but can't determine specific open play times, still include it with a note
 
