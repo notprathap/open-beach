@@ -5,7 +5,7 @@ const API = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ location, lat, lng, dateRange, type }),
-      signal: AbortSignal.timeout(180000),
+      signal: AbortSignal.timeout(600000),
     });
 
     if (!res.ok) {
