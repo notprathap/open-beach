@@ -56,7 +56,7 @@ const tools = [
   },
 ];
 
-function makeExecuteTool(locale) {
+function makeExecuteTool(locale, onProgress) {
   return async function executeTool(toolName, toolInput) {
     switch (toolName) {
       case 'web_search': {
@@ -68,7 +68,23 @@ function makeExecuteTool(locale) {
         if (result.error) {
           return `Error fetching ${result.url}: ${result.error}`;
         }
-        return result.content;
+        let content = result.content;
+
+        // If the page has booking widget iframes, auto-extract schedule data
+        if (result.bookingIframes && result.bookingIframes.length > 0) {
+          for (const widgetUrl of result.bookingIframes) {
+            try {
+              if (onProgress) onProgress({ stage: 'searching', message: `Extracting schedule from booking calendar...` });
+              const extracted = await deepExtract(widgetUrl, 'find all beach volleyball open play sessions with dates and times');
+              if (extracted.scheduleData && extracted.scheduleData.length > 0) {
+                content += '\n\n[Schedule data extracted from booking calendar at ' + widgetUrl + ':\n' + JSON.stringify(extracted.scheduleData, null, 2) + '\n]';
+                break;
+              }
+            } catch {}
+          }
+        }
+
+        return content;
       }
       case 'deep_extract': {
         const result = await deepExtract(toolInput.url, toolInput.goal, locale);
@@ -86,7 +102,7 @@ function makeExecuteTool(locale) {
 async function searchForSessions(location, lat, lng, dateRange, onProgress, type = 'openplay') {
   const client = new Anthropic();
   const locale = localeFromCoords(lat, lng);
-  const executeTool = makeExecuteTool(locale);
+  const executeTool = makeExecuteTool(locale, onProgress);
 
   const now = new Date();
   const today = now.toISOString().split('T')[0];

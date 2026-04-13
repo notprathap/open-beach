@@ -1,6 +1,5 @@
 const fetch = require('node-fetch');
 const cheerio = require('cheerio');
-const { deepExtract } = require('./deepExtract');
 
 const MAX_CONTENT_LENGTH = 12000;
 
@@ -211,38 +210,33 @@ async function fetchPage(url) {
   const result = jinaResult || await fetchWithCheerio(url);
 
   if (result && !result.error) {
-    // Fetch raw HTML to find booking widget iframes
-    const html = await fetchRawHtml(url);
-    let iframes = html ? extractBookingIframes(html) : [];
+    // Skip iframe detection for known platforms that won't have booking widgets
+    const skipDomains = ['meetup.com', 'eventbrite', 'facebook.com', 'google.com', 'serpapi.com', 'hu-berlin.de'];
+    const shouldCheckIframes = !skipDomains.some(d => url.includes(d));
 
-    // Also check linked booking pages on the same domain for additional iframes
-    if (html) {
-      const bookingLinks = findBookingLinks(html, url);
-      for (const link of bookingLinks.slice(0, 3)) {
-        const linkedHtml = await fetchRawHtml(link);
-        if (linkedHtml) {
-          const found = extractBookingIframes(linkedHtml);
-          found.forEach(u => { if (!iframes.includes(u)) iframes.push(u); });
+    if (shouldCheckIframes) {
+      const html = await fetchRawHtml(url);
+      let iframes = html ? extractBookingIframes(html) : [];
+
+      // If no iframes on this page, check linked booking pages on the same domain
+      if (iframes.length === 0 && html) {
+        const bookingLinks = findBookingLinks(html, url);
+        for (const link of bookingLinks.slice(0, 2)) {
+          const linkedHtml = await fetchRawHtml(link);
+          if (linkedHtml) {
+            const found = extractBookingIframes(linkedHtml);
+            found.forEach(u => { if (!iframes.includes(u)) iframes.push(u); });
+          }
         }
       }
-    }
 
-    if (iframes.length > 0) {
-      // Auto-extract schedule data from booking widget iframes
-      // Deduplicate — prefer URLs with ?list=schedule over bare URLs
-      const uniqueIframes = [...new Set(iframes)].filter(u => {
-        const bare = u.split('?')[0];
-        return u.includes('?') || !iframes.some(other => other !== u && other.startsWith(bare + '?'));
-      });
-
-      for (const widgetUrl of uniqueIframes.slice(0, 3)) {
-        try {
-          const extracted = await deepExtract(widgetUrl, 'find all beach volleyball open play sessions with dates and times');
-          if (extracted.scheduleData && extracted.scheduleData.length > 0) {
-            result.content += '\n\n[Schedule data extracted from booking calendar at ' + widgetUrl + ':\n' + JSON.stringify(extracted.scheduleData, null, 2) + '\n]';
-            break; // Got data from one widget, no need to try the others
-          }
-        } catch {}
+      if (iframes.length > 0) {
+        // Deduplicate — prefer URLs with ?list=schedule over bare URLs
+        const uniqueIframes = [...new Set(iframes)].filter(u => {
+          const bare = u.split('?')[0];
+          return u.includes('?') || !iframes.some(other => other !== u && other.startsWith(bare + '?'));
+        });
+        result.bookingIframes = uniqueIframes;
       }
     }
   }
