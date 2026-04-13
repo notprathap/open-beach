@@ -88,7 +88,11 @@ async function searchForSessions(location, lat, lng, dateRange, onProgress, type
   const locale = localeFromCoords(lat, lng);
   const executeTool = makeExecuteTool(locale);
 
-  const today = new Date().toISOString().split('T')[0];
+  const now = new Date();
+  const today = now.toISOString().split('T')[0];
+  const dayOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][now.getDay()];
+  const dateContext = `Today is ${dayOfWeek}, ${today}.`;
+
   const userMessage = type === 'tournaments'
     ? `Find all beach volleyball tournaments, competitions, and leagues near ${location} (coordinates: ${lat}, ${lng}).
 
@@ -96,14 +100,14 @@ Date range to search: ${dateRange.start} to ${dateRange.end}
 
 Be exhaustive. Search tournament platforms, national/regional federation sites, venue websites, and local event listings. Search in the local language as well as English. Note team formats (2v2, 4v4), skill levels, and registration deadlines.
 
-Today's date is ${today}.`
+${dateContext}`
     : `Find all beach volleyball open play / pickup / drop-in sessions near ${location} (coordinates: ${lat}, ${lng}).
 
 Date range to search: ${dateRange.start} to ${dateRange.end}
 
 Be exhaustive in your search. Search venue websites, booking platforms (meetup.com, sportplaner.de, playtomic.io, etc.), and local event listings. Remember to search in the local language of this city as well as English. Fetch venue websites and calendar pages to get specific schedules and booking links.
 
-Today's date is ${today}.`;
+${dateContext}`;
 
   const messages = [{ role: 'user', content: userMessage }];
 

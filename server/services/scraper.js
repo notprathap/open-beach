@@ -1,5 +1,6 @@
 const fetch = require('node-fetch');
 const cheerio = require('cheerio');
+const { deepExtract } = require('./deepExtract');
 
 const MAX_CONTENT_LENGTH = 12000;
 
@@ -154,16 +155,95 @@ async function detectBookingIframes(url) {
   }
 }
 
+// Find booking/schedule page links on the same domain
+function findBookingLinks(html, baseUrl) {
+  const $ = cheerio.load(html);
+  const links = [];
+  const baseHost = new URL(baseUrl).hostname;
+  const bookingTerms = /buch|book|schedule|kalender|calendar|sportangebote|angebote/i;
+
+  $('a[href]').each((_, el) => {
+    const href = $(el).attr('href') || '';
+    const text = $(el).text().toLowerCase();
+    try {
+      const fullUrl = new URL(href, baseUrl).toString();
+      const linkHost = new URL(fullUrl).hostname;
+      if (linkHost === baseHost && (bookingTerms.test(href) || bookingTerms.test(text)) && fullUrl !== baseUrl) {
+        links.push(fullUrl);
+      }
+    } catch {}
+  });
+
+  // Deduplicate
+  return [...new Set(links)];
+}
+
+// Fetch raw HTML once and extract iframes + booking links
+async function fetchRawHtml(url) {
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'text/html' },
+      follow: 3,
+      timeout: 8000,
+    });
+    if (!res.ok) return null;
+    return await res.text();
+  } catch {
+    return null;
+  }
+}
+
+function extractBookingIframes(html) {
+  const $ = cheerio.load(html);
+  const iframes = [];
+  $('iframe').each((_, el) => {
+    const src = $(el).attr('src') || '';
+    if (src.includes('eversports') || src.includes('playtomic') || src.includes('matchi') || src.includes('mycourt')) {
+      iframes.push(src);
+    }
+  });
+  return iframes;
+}
+
 async function fetchPage(url) {
   // Try Jina Reader first (handles JavaScript), fall back to cheerio
   const jinaResult = await fetchWithJina(url);
   const result = jinaResult || await fetchWithCheerio(url);
 
-  // Also check raw HTML for booking widget iframes (Jina strips these)
   if (result && !result.error) {
-    const iframes = await detectBookingIframes(url);
+    // Fetch raw HTML to find booking widget iframes
+    const html = await fetchRawHtml(url);
+    let iframes = html ? extractBookingIframes(html) : [];
+
+    // Also check linked booking pages on the same domain for additional iframes
+    if (html) {
+      const bookingLinks = findBookingLinks(html, url);
+      for (const link of bookingLinks.slice(0, 3)) {
+        const linkedHtml = await fetchRawHtml(link);
+        if (linkedHtml) {
+          const found = extractBookingIframes(linkedHtml);
+          found.forEach(u => { if (!iframes.includes(u)) iframes.push(u); });
+        }
+      }
+    }
+
     if (iframes.length > 0) {
-      result.content += '\n\n[Booking widget iframes detected — use deep_extract on these URLs to get schedule data: ' + iframes.join(' , ') + ']';
+      // Auto-extract schedule data from booking widget iframes
+      // Deduplicate — prefer URLs with ?list=schedule over bare URLs
+      const uniqueIframes = [...new Set(iframes)].filter(u => {
+        const bare = u.split('?')[0];
+        return u.includes('?') || !iframes.some(other => other !== u && other.startsWith(bare + '?'));
+      });
+
+      for (const widgetUrl of uniqueIframes.slice(0, 3)) {
+        try {
+          const extracted = await deepExtract(widgetUrl, 'find all beach volleyball open play sessions with dates and times');
+          if (extracted.scheduleData && extracted.scheduleData.length > 0) {
+            result.content += '\n\n[Schedule data extracted from booking calendar at ' + widgetUrl + ':\n' + JSON.stringify(extracted.scheduleData, null, 2) + '\n]';
+            break; // Got data from one widget, no need to try the others
+          }
+        } catch {}
+      }
     }
   }
 
