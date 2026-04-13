@@ -77,11 +77,13 @@ async function askGemini(imageBase64, prompt) {
 
 const EXTRACT_PROMPT = `Look at this webpage screenshot. Find any beach volleyball open play / pickup / drop-in session schedules.
 
+CRITICAL: If the screenshot shows a weekly calendar grid, each column represents a specific day with its date shown in the column header (e.g., "Do. 16.04" = Thursday April 16). You MUST read the date from the column header that each event appears under, and use that exact date. Do NOT guess dates — read them from the screenshot.
+
 Respond with JSON in one of these formats:
 
 If you can see schedule data (dates, times, session names):
-{"action": "extract", "data": [{"date": "2026-04-15", "startTime": "18:00", "endTime": "20:00", "title": "Open Play", "price": "€10"}]}
-If you see a recurring pattern (e.g., "every Friday"), list a maximum of 4 upcoming dates. Keep data concise.
+{"action": "extract", "data": [{"date": "2026-04-16", "startTime": "18:00", "endTime": "20:00", "title": "Open Play", "price": "€10"}]}
+Each event's date MUST match the column header it appears under in the calendar. Keep data concise — max 10 events.
 
 If the schedule is not visible but you can see a link/button that would lead to it (e.g., "Book now", "Schedule", "Open Play", "Buchen"):
 {"action": "click", "selector": "text=Book Now", "reason": "clicking booking button to find schedule"}
@@ -117,9 +119,14 @@ async function deepExtract(url, goal, locale) {
       if (Date.now() - startTime > TIMEOUT_MS) break;
 
       const screenshot = await screenshotPage(page);
+      // Also capture text content for date accuracy
+      let pageText = '';
+      try { pageText = (await page.innerText('body')).substring(0, 3000); } catch {}
+
+      const textContext = pageText ? `\n\nPage text content (use this to verify dates and times):\n${pageText}` : '';
       const prompt = i === 0
-        ? `${EXTRACT_PROMPT}\n\nGoal: ${goal}\nCurrent URL: ${page.url()}`
-        : `${EXTRACT_PROMPT}\n\nGoal: ${goal}\nI navigated to: ${page.url()}`;
+        ? `${EXTRACT_PROMPT}\n\nGoal: ${goal}\nCurrent URL: ${page.url()}${textContext}`
+        : `${EXTRACT_PROMPT}\n\nGoal: ${goal}\nI navigated to: ${page.url()}${textContext}`;
 
       const decision = await askGemini(screenshot, prompt);
 
