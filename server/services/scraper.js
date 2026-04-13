@@ -130,11 +130,44 @@ async function fetchWithCheerio(url) {
   }
 }
 
+// Quick raw HTML fetch to detect booking widget iframes
+async function detectBookingIframes(url) {
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'text/html' },
+      follow: 3,
+      timeout: 8000,
+    });
+    if (!res.ok) return [];
+    const html = await res.text();
+    const $ = cheerio.load(html);
+    const iframes = [];
+    $('iframe').each((_, el) => {
+      const src = $(el).attr('src') || '';
+      if (src.includes('eversports') || src.includes('playtomic') || src.includes('matchi') || src.includes('mycourt')) {
+        iframes.push(src);
+      }
+    });
+    return iframes;
+  } catch {
+    return [];
+  }
+}
+
 async function fetchPage(url) {
   // Try Jina Reader first (handles JavaScript), fall back to cheerio
   const jinaResult = await fetchWithJina(url);
-  if (jinaResult) return jinaResult;
-  return fetchWithCheerio(url);
+  const result = jinaResult || await fetchWithCheerio(url);
+
+  // Also check raw HTML for booking widget iframes (Jina strips these)
+  if (result && !result.error) {
+    const iframes = await detectBookingIframes(url);
+    if (iframes.length > 0) {
+      result.content += '\n\n[Booking widget iframes detected — use deep_extract on these URLs to get schedule data: ' + iframes.join(' , ') + ']';
+    }
+  }
+
+  return result;
 }
 
 module.exports = { fetchPage };
